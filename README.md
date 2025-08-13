@@ -239,7 +239,7 @@ Pull Request와 Issue를 환영합니다!
 
 **PROPRIETARY SOFTWARE - All Rights Reserved**
 
-Copyright (c) 2024 Yeongyu Yang
+Copyright (c) 2024
 
 본 소프트웨어는 저작권자의 독점 소프트웨어입니다.
 - ❌ **수정 금지**: 소스 코드의 수정, 변경, 개작을 금지합니다
