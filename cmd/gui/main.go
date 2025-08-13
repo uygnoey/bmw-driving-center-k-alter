@@ -797,9 +797,50 @@ func (g *GUI) checkReservations(browser *browser.BrowserClient, notifier *notifi
 }
 
 func (g *GUI) testEmail() {
-	g.addLog("이메일 테스트 전송 중...")
-	// TODO: Implement email test
-	dialog.ShowInformation("이메일 테스트", "테스트 이메일을 전송했습니다.", g.window)
+	g.addLog("📧 이메일 테스트 시작...")
+	
+	// 현재 설정 저장
+	g.saveConfig()
+	
+	// 이메일 설정 확인
+	if g.config.Email.From == "" || len(g.config.Email.To) == 0 || g.config.Email.To[0] == "" {
+		g.addLog("❌ 이메일 주소가 설정되지 않았습니다")
+		dialog.ShowError(fmt.Errorf("보내는 사람과 받는 사람 이메일을 설정해주세요"), g.window)
+		return
+	}
+	
+	if g.config.Email.SMTP.Host == "" || g.config.Email.SMTP.Port == 0 {
+		g.addLog("❌ SMTP 서버 설정이 없습니다")
+		dialog.ShowError(fmt.Errorf("SMTP 서버 정보를 설정해주세요"), g.window)
+		return
+	}
+	
+	// 이메일 알림 서비스 생성
+	emailNotifier := notifier.NewEmailNotifier(g.config.Email)
+	
+	// 테스트 상태 생성
+	testStatus := &models.ReservationStatus{
+		Programs: []models.Program{
+			{Name: "TEST PROGRAM", Keywords: []string{"테스트"}},
+		},
+		CheckedAt:   time.Now(),
+		HasOpenings: true,
+	}
+	
+	// 이메일 전송
+	g.addLog(fmt.Sprintf("📨 테스트 이메일 전송 중..."))
+	g.addLog(fmt.Sprintf("   From: %s", g.config.Email.From))
+	g.addLog(fmt.Sprintf("   To: %s", strings.Join(g.config.Email.To, ", ")))
+	g.addLog(fmt.Sprintf("   SMTP: %s:%d", g.config.Email.SMTP.Host, g.config.Email.SMTP.Port))
+	
+	if err := emailNotifier.SendNotification(testStatus); err != nil {
+		g.addLog(fmt.Sprintf("❌ 이메일 전송 실패: %v", err))
+		dialog.ShowError(err, g.window)
+		return
+	}
+	
+	g.addLog("✅ 테스트 이메일 전송 완료!")
+	dialog.ShowInformation("성공", "테스트 이메일이 전송되었습니다.\n받은 편지함을 확인해주세요.", g.window)
 }
 
 func (g *GUI) addLog(message string) {

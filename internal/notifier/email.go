@@ -27,11 +27,16 @@ func NewEmailNotifier(cfg config.EmailConfig) *EmailNotifier {
 
 // SendNotification sends an email notification about available programs
 func (e *EmailNotifier) SendNotification(status *models.ReservationStatus) error {
-	// Filter only open programs
+	// If HasOpenings is true, use all programs (backward compatibility)
 	var openPrograms []models.Program
-	for _, program := range status.Programs {
-		if program.IsOpen {
-			openPrograms = append(openPrograms, program)
+	if status.HasOpenings {
+		openPrograms = status.Programs
+	} else {
+		// Filter only open programs
+		for _, program := range status.Programs {
+			if program.IsOpen {
+				openPrograms = append(openPrograms, program)
+			}
 		}
 	}
 

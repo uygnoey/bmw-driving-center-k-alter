@@ -28,19 +28,27 @@ go run github.com/playwright-community/playwright-go/cmd/playwright@latest insta
 
 ### 3. 설정 파일 수정
 
+#### ⚠️ Gmail 이메일 설정 (중요!)
+
+Gmail을 사용하는 경우 **일반 비밀번호가 아닌 앱 비밀번호**를 사용해야 합니다:
+
+1. **Google 계정에서 2단계 인증 활성화**
+2. **앱 비밀번호 생성**: https://myaccount.google.com/apppasswords
+3. 생성된 16자리 비밀번호를 아래 `password` 필드에 입력
+
 `configs/config.yaml` 파일을 열어 다음을 설정하세요:
 
 ```yaml
 auth:
     username: your-bmw-id@email.com  # BMW ID
-    password: your-password           # 비밀번호
+    password: your-password           # BMW 비밀번호
 
 email:
     smtp:
         host: smtp.gmail.com
         port: 587
         username: your-email@gmail.com
-        password: your-app-password  # Gmail 앱 비밀번호
+        password: xxxx-xxxx-xxxx-xxxx  # ⚠️ Gmail 앱 비밀번호 (일반 비밀번호 X)
     from: your-email@gmail.com
     to:
         - recipient@example.com
@@ -51,6 +59,11 @@ programs:  # 모니터링할 프로그램 선택
         - M Core
         - M 코어
 ```
+
+> 💡 **이메일이 안 오는 경우**:
+> - Gmail 앱 비밀번호를 사용했는지 확인
+> - 스팸 폴더 확인
+> - GUI의 "이메일 테스트" 버튼으로 설정 테스트
 
 ### 4. 실행
 
