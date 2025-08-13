@@ -235,9 +235,21 @@ Pull Request와 Issue를 환영합니다!
 4. Push to the Branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
 
-## 라이선스 📄
+## 📜 라이센스
 
-MIT License - 자유롭게 사용하세요!
+**PROPRIETARY SOFTWARE - All Rights Reserved**
+
+Copyright (c) 2024 Yeongyu Yang
+
+본 소프트웨어는 저작권자의 독점 소프트웨어입니다.
+- ❌ **수정 금지**: 소스 코드의 수정, 변경, 개작을 금지합니다
+- ❌ **재배포 금지**: 어떠한 형태로든 재배포를 금지합니다
+- ❌ **상업적 사용 금지**: 상업적 목적으로 사용할 수 없습니다
+- ✅ **개인 사용만 허용**: BMW 드라이빙 센터 예약 모니터링 목적으로만 사용 가능
+
+자세한 내용은 [LICENSE](LICENSE) 파일을 참조하세요.
+
+⚠️ **경고**: 본 라이센스 조건을 위반할 경우 법적 조치를 받을 수 있습니다.
 
 ## 감사의 말 💙
 
