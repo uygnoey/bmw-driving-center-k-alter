@@ -53,13 +53,31 @@ func NewBrowserClient() (*BrowserClient, error) {
 
 // Start launches the browser
 func (b *BrowserClient) Start(headless bool) error {
+	// Stealth mode 설정 - 자동화 감지 우회
 	browser, err := b.pw.Chromium.Launch(playwright.BrowserTypeLaunchOptions{
 		Headless: playwright.Bool(headless),
 		Args: []string{
+			// 자동화 감지 우회
 			"--disable-blink-features=AutomationControlled",
+			"--exclude-switches=enable-automation",
+			"--disable-infobars",
+			"--disable-automation",
+			
+			// WebDriver 플래그 제거
 			"--disable-dev-shm-usage",
 			"--no-sandbox",
 			"--disable-setuid-sandbox",
+			
+			// 추가 stealth 옵션
+			"--disable-background-timer-throttling",
+			"--disable-backgrounding-occluded-windows",
+			"--disable-renderer-backgrounding",
+			"--disable-features=TranslateUI",
+			"--disable-ipc-flooding-protection",
+			
+			// 실제 Chrome과 동일하게
+			"--window-size=1280,720",
+			"--start-maximized",
 		},
 	})
 	if err != nil {
@@ -74,13 +92,26 @@ func (b *BrowserClient) Start(headless bool) error {
 	if _, err := os.Stat(stateFile); err == nil {
 		log.Println("💾 저장된 세션 발견, 복원 시도...")
 		
-		// 저장된 세션으로 컨텍스트 생성
+		// 저장된 세션으로 컨텍스트 생성 (stealth 설정 포함)
 		context, err := browser.NewContext(playwright.BrowserNewContextOptions{
 			StorageStatePath: playwright.String(stateFile),
 			UserAgent: playwright.String("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"),
 			Viewport: &playwright.Size{
 				Width:  1280,
 				Height: 720,
+			},
+			// Stealth 설정 추가
+			IgnoreHttpsErrors: playwright.Bool(true),
+			JavaScriptEnabled: playwright.Bool(true),
+			HasTouch:          playwright.Bool(false),
+			IsMobile:          playwright.Bool(false),
+			Locale:           playwright.String("ko-KR"),
+			TimezoneId:       playwright.String("Asia/Seoul"),
+			Permissions:      []string{"geolocation"},
+			ExtraHttpHeaders: map[string]string{
+				"Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
+				"Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+				"Accept-Encoding": "gzip, deflate, br",
 			},
 		})
 		if err != nil {
@@ -112,6 +143,38 @@ func (b *BrowserClient) Start(headless bool) error {
 	page.SetDefaultTimeout(60000) // 60 seconds
 	page.SetDefaultNavigationTimeout(60000)
 	
+	// WebDriver 속성 제거 (자동화 감지 우회)
+	script := `
+		// WebDriver 속성 제거
+		Object.defineProperty(navigator, 'webdriver', {
+			get: () => undefined
+		});
+		
+		// Chrome 속성 수정
+		window.chrome = {
+			runtime: {},
+		};
+		
+		// Permissions 수정
+		const originalQuery = window.navigator.permissions.query;
+		window.navigator.permissions.query = (parameters) => (
+			parameters.name === 'notifications' ?
+				Promise.resolve({ state: Notification.permission }) :
+				originalQuery(parameters)
+		);
+		
+		// Plugin 배열 수정
+		Object.defineProperty(navigator, 'plugins', {
+			get: () => [1, 2, 3, 4, 5],
+		});
+		
+		// Language 수정
+		Object.defineProperty(navigator, 'languages', {
+			get: () => ['ko-KR', 'ko', 'en-US', 'en'],
+		});
+	`
+	page.AddInitScript(playwright.Script{Content: &script})
+	
 	b.page = page
 
 	return nil
@@ -124,6 +187,19 @@ func (b *BrowserClient) createNewContext(browser playwright.Browser) (playwright
 		Viewport: &playwright.Size{
 			Width:  1280,
 			Height: 720,
+		},
+		// Stealth 설정 추가
+		IgnoreHttpsErrors: playwright.Bool(true),
+		JavaScriptEnabled: playwright.Bool(true),
+		HasTouch:          playwright.Bool(false),
+		IsMobile:          playwright.Bool(false),
+		Locale:           playwright.String("ko-KR"),
+		TimezoneId:       playwright.String("Asia/Seoul"),
+		Permissions:      []string{"geolocation"},
+		ExtraHttpHeaders: map[string]string{
+			"Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
+			"Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+			"Accept-Encoding": "gzip, deflate, br",
 		},
 	})
 	if err != nil {
@@ -254,36 +330,24 @@ func (b *BrowserClient) Login(username, password string) error {
 	}
 	
 	log.Println("✅ BMW 고객 계정 로그인 페이지 감지")
-	log.Println("⚡ 로그인 준비 중...")
+	log.Println("⚡ 즉시 로그인 시작!")
 	
-	// Angular 앱이 완전히 로드될 때까지 대기 (필수!)
-	log.Println("   Angular 앱 로딩 대기 (3초)...")
-	time.Sleep(3 * time.Second)
+	// 최소 대기만
+	time.Sleep(500 * time.Millisecond)
 	
 	// BMW 로그인 페이지의 정확한 이메일 필드 선택
 	log.Println("🔍 이메일 필드 찾는 중...")
 	emailField := b.page.Locator("input#email")
 	
-	// 이메일 필드가 나타날 때까지 대기
+	// 이메일 필드가 나타날 때까지 대기 (빠르게)
 	err := emailField.WaitFor(playwright.LocatorWaitForOptions{
 		State:   playwright.WaitForSelectorStateVisible,
-		Timeout: playwright.Float(5000), // 5초 대기
+		Timeout: playwright.Float(2000), // 2초만
 	})
 	if err != nil {
-		log.Printf("⚠️ #email로 찾기 실패: %v", err)
-		// 폴백: name 속성으로 시도
+		// 폴백: name 속성으로 즉시 시도
 		emailField = b.page.Locator("input[name='email']")
-		err = emailField.WaitFor(playwright.LocatorWaitForOptions{
-			State:   playwright.WaitForSelectorStateVisible,
-			Timeout: playwright.Float(3000),
-		})
-		if err != nil {
-			log.Printf("❌ 이메일 필드를 찾을 수 없음: %v", err)
-			// 마지막 시도: type=text 첫 번째 필드
-			emailField = b.page.Locator("input[type='text']").First()
-		}
 	}
-	log.Println("✅ 이메일 필드 발견")
 	
 	// hCaptcha 감지
 	log.Println("🛡️ hCaptcha 확인 중...")
@@ -294,13 +358,23 @@ func (b *BrowserClient) Login(username, password string) error {
 		log.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 		log.Println("⚠️  CAPTCHA가 표시되었습니다!")
 		log.Println("⚠️  브라우저에서 수동으로 CAPTCHA를 완료해주세요.")
-		log.Println("⚠️  완료 후 Enter 키를 눌러 계속 진행하세요.")
+		log.Println("⚠️  완료 후 자동으로 진행됩니다.")
 		log.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 		
-		// 사용자 입력 대기
-		fmt.Print("CAPTCHA 완료 후 Enter 키를 누르세요...")
-		fmt.Scanln()
-		log.Println("✅ 사용자 확인 완료, 로그인 계속 진행...")
+		// CAPTCHA가 사라질 때까지 대기
+		log.Println("⏳ CAPTCHA 완료 대기 중...")
+		for i := 0; i < 60; i++ { // 최대 60초 대기
+			time.Sleep(1 * time.Second)
+			captchaFrame = b.page.Locator("iframe[src*='hcaptcha']")
+			captchaCount, _ = captchaFrame.Count()
+			if captchaCount == 0 {
+				log.Println("✅ CAPTCHA 완료 확인, 계속 진행...")
+				break
+			}
+			if i%5 == 0 {
+				log.Printf("   대기 중... (%d초)", i)
+			}
+		}
 	}
 	
 	// ==== STEP 1: 이메일 입력 ====
@@ -476,13 +550,19 @@ func (b *BrowserClient) Login(username, password string) error {
 				log.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 				log.Println("⚠️  CAPTCHA가 표시되었습니다!")
 				log.Println("⚠️  브라우저에서 수동으로 CAPTCHA를 완료해주세요.")
-				log.Println("⚠️  완료 후 Enter 키를 눌러 계속 진행하세요.")
+				log.Println("⚠️  CAPTCHA 완료 후 자동으로 진행됩니다.")
 				log.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 				
-				// 사용자 입력 대기
-				fmt.Print("CAPTCHA 완료 후 Enter 키를 누르세요...")
-				fmt.Scanln()
-				log.Println("✅ 사용자 확인 완료, 로그인 계속 진행...")
+				// CAPTCHA가 사라질 때까지 대기
+				for j := 0; j < 30; j++ { // 최대 30초 대기
+					time.Sleep(1 * time.Second)
+					captchaFrame = b.page.Locator("iframe[src*='hcaptcha']")
+					captchaCount, _ = captchaFrame.Count()
+					if captchaCount == 0 {
+						log.Println("✅ CAPTCHA 완료 확인")
+						break
+					}
+				}
 				continue
 			}
 			
