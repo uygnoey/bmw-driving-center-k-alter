@@ -89,10 +89,17 @@ else
     exit 1
 fi
 
-# 설정 파일 복사
+# 설정 파일 복사 (템플릿만)
 echo ""
 echo "📄 설정 파일 복사 중..."
-cp -r configs ${BUILD_DIR}/
+mkdir -p ${BUILD_DIR}/configs
+# 템플릿 파일을 config.yaml로 복사
+if [ -f "configs/config.yaml.template" ]; then
+    cp configs/config.yaml.template ${BUILD_DIR}/configs/config.yaml
+else
+    # 템플릿이 없으면 기존 config.yaml 복사 (하위 호환성)
+    cp configs/config.yaml ${BUILD_DIR}/configs/
+fi
 echo -e "${GREEN}✅ 설정 파일 복사 완료${NC}"
 
 # Playwright 브라우저 확인
