@@ -11,10 +11,11 @@ import (
 
 // Config represents the application configuration
 type Config struct {
-	Auth     AuthConfig          `yaml:"auth"`
-	Monitor  MonitorConfig       `yaml:"monitor"`
-	Programs []models.Program    `yaml:"programs"`
-	Email    EmailConfig         `yaml:"email"`
+	Auth          AuthConfig          `yaml:"auth"`
+	Monitor       MonitorConfig       `yaml:"monitor"`
+	Programs      []models.Program    `yaml:"programs"`
+	Email         EmailConfig         `yaml:"email"`
+	CaptchaSolver CaptchaSolverConfig `yaml:"captcha_solver,omitempty"`
 }
 
 // AuthConfig represents authentication settings
@@ -28,6 +29,7 @@ type MonitorConfig struct {
 	Interval        int    `yaml:"interval"`          // in seconds
 	ReservationURL  string `yaml:"reservation_url"`   // 예약 페이지 URL
 	ProgramListURL  string `yaml:"program_list_url"`  // 프로그램 목록 URL
+	Headless        bool   `yaml:"headless,omitempty"` // 브라우저 숨김 여부 (true: 숨김, false: 표시)
 }
 
 // EmailConfig represents email notification settings
@@ -44,6 +46,12 @@ type SMTPConfig struct {
 	Port     int    `yaml:"port"`
 	Username string `yaml:"username"`
 	Password string `yaml:"password"`
+}
+
+// CaptchaSolverConfig represents captcha solver settings
+type CaptchaSolverConfig struct {
+	Service string `yaml:"service,omitempty"` // "solvecaptcha" or "2captcha"
+	APIKey  string `yaml:"api_key,omitempty"`
 }
 
 // GetConfigPath finds the configuration file path

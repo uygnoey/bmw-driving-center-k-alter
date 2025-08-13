@@ -10,6 +10,7 @@ BMW 드라이빙 센터(https://driving-center.bmw.co.kr) 예약 상태를 24시
 - 🖥️ **GUI/CLI 지원**: 편리한 GUI와 서버용 CLI 모두 제공
 - 🤖 **백그라운드 실행**: 브라우저 창 없이 조용히 실행 가능
 - 📋 **프로그램 선택**: 원하는 프로그램만 선택하여 모니터링
+- 🔓 **hCaptcha 대응**: 자동/수동 hCaptcha 해결 지원
 
 ## 빠른 시작 🚀
 
@@ -72,6 +73,33 @@ programs:  # 모니터링할 프로그램 선택
 # 사용 가능한 프로그램 목록 보기
 ./build/bmw-monitor-cli -list-programs
 ```
+
+### 5. hCaptcha 자동 해결 (선택사항)
+
+프로그램은 hCaptcha를 감지하면 자동으로 일시 정지하고 사용자가 수동으로 해결할 수 있도록 대기합니다.
+
+#### 자동 해결 활성화 (추천: SolveCaptcha)
+```bash
+# SolveCaptcha API 키 설정 (더 빠르고 정확함)
+export SOLVECAPTCHA_API_KEY=your_solvecaptcha_api_key
+
+# 프로그램 실행
+./build/bmw-monitor-cli
+```
+
+#### 대체 서비스 (2captcha)
+```bash
+# 2captcha API 키 설정
+export TWOCAPTCHA_API_KEY=your_2captcha_api_key
+
+# 프로그램 실행
+./build/bmw-monitor-cli
+```
+
+> **참고**: 
+> - SolveCaptcha: https://solvecaptcha.com (hCaptcha $1.9/1000개, 약 35초)
+> - 2captcha: https://2captcha.com (다양한 요금제)
+> - 두 서비스 모두 유료이며, SolveCaptcha가 hCaptcha에 더 특화되어 있습니다.
 
 ## 직접 빌드하기 🔨
 

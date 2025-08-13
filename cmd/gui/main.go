@@ -36,6 +36,10 @@ type GUI struct {
 	smtpUserEntry  *widget.Entry
 	smtpPassEntry  *widget.Entry
 	
+	// Captcha solver fields
+	captchaServiceSelect *widget.Select
+	captchaAPIKeyEntry   *widget.Entry
+	
 	programCheckboxes      map[string]*widget.Check
 	selectedProgramsLabel  *widget.Label
 	programs              []models.Program
@@ -202,12 +206,26 @@ func (g *GUI) buildSettingsTab() fyne.CanvasObject {
 	g.headlessCheck = widget.NewCheck("백그라운드 모드 (브라우저 숨김)", nil)
 	g.headlessCheck.SetChecked(true) // Default to headless
 	
+	// Captcha solver settings
+	g.captchaServiceSelect = widget.NewSelect(
+		[]string{"수동 해결", "SolveCaptcha", "2captcha"},
+		nil,
+	)
+	g.captchaServiceSelect.SetSelected("수동 해결")
+	
+	g.captchaAPIKeyEntry = widget.NewEntry()
+	g.captchaAPIKeyEntry.SetPlaceHolder("API 키 입력 (선택사항)")
+	
 	monitorCard := widget.NewCard("모니터링 설정", "",
 		container.New(layout.NewFormLayout(),
 			widget.NewLabel("확인 간격(초):"),
 			g.intervalEntry,
 			widget.NewLabel("브라우저 모드:"),
 			g.headlessCheck,
+			widget.NewLabel("hCaptcha 해결:"),
+			g.captchaServiceSelect,
+			widget.NewLabel("Captcha API 키:"),
+			g.captchaAPIKeyEntry,
 		),
 	)
 	
@@ -395,6 +413,22 @@ func (g *GUI) loadConfigToUI() {
 	
 	// Load monitor settings
 	g.intervalEntry.SetText(fmt.Sprintf("%d", g.config.Monitor.Interval))
+	g.headlessCheck.SetChecked(g.config.Monitor.Headless)
+	
+	// Load captcha solver settings
+	if g.config.CaptchaSolver.Service != "" {
+		switch g.config.CaptchaSolver.Service {
+		case "solvecaptcha":
+			g.captchaServiceSelect.SetSelected("SolveCaptcha")
+		case "2captcha":
+			g.captchaServiceSelect.SetSelected("2captcha")
+		default:
+			g.captchaServiceSelect.SetSelected("수동 해결")
+		}
+	} else {
+		g.captchaServiceSelect.SetSelected("수동 해결")
+	}
+	g.captchaAPIKeyEntry.SetText(g.config.CaptchaSolver.APIKey)
 	
 	// Load email settings
 	g.emailFromEntry.SetText(g.config.Email.From)
@@ -465,6 +499,19 @@ func (g *GUI) saveConfig() {
 	if err == nil && interval > 0 {
 		g.config.Monitor.Interval = interval
 	}
+	g.config.Monitor.Headless = g.headlessCheck.Checked
+	
+	// Save captcha solver settings
+	selectedService := g.captchaServiceSelect.Selected
+	switch selectedService {
+	case "SolveCaptcha":
+		g.config.CaptchaSolver.Service = "solvecaptcha"
+	case "2captcha":
+		g.config.CaptchaSolver.Service = "2captcha"
+	default:
+		g.config.CaptchaSolver.Service = ""
+	}
+	g.config.CaptchaSolver.APIKey = g.captchaAPIKeyEntry.Text
 	
 	g.config.Email.From = g.emailFromEntry.Text
 	g.config.Email.To = []string{g.emailToEntry.Text}
@@ -554,7 +601,7 @@ func (g *GUI) runMonitoring() {
 	// Initialize browser client
 	g.addLog("🌐 Playwright 브라우저 클라이언트 초기화 중...")
 	var err error
-	g.browserClient, err = browser.NewBrowserClient()
+	g.browserClient, err = browser.NewBrowserClientWithConfig(g.config)
 	if err != nil {
 		g.addLog(fmt.Sprintf("❌ 브라우저 초기화 실패: %v", err))
 		g.stopMonitoring()
@@ -597,6 +644,7 @@ func (g *GUI) runMonitoring() {
 			return
 		}
 		g.addLog("✅ 로그인 성공! 세션 활성화됨")
+		// CAPTCHA는 이제 Login 메서드 내부에서 자동으로 처리됨
 	} else {
 		g.addLog("🎉 저장된 세션이 유효합니다")
 	}
@@ -655,12 +703,22 @@ func (g *GUI) checkReservations(browser *browser.BrowserClient, notifier *notifi
 	
 	g.addLog(fmt.Sprintf("🔎 %d개 프로그램 확인 중...", len(programNames)))
 	
-	// Check reservation page
-	availability, err := browser.CheckReservationPage(programNames)
+	// Check reservation page with hCaptcha detection
+	availability, captchaDetected, err := browser.CheckReservationPageWithCaptchaAlert(programNames)
 	if err != nil {
 		g.addLog(fmt.Sprintf("❌ 예약 페이지 확인 실패: %v", err))
 		g.addLog("   네트워크 연결 또는 사이트 상태를 확인해주세요")
 		return
+	}
+	
+	// hCaptcha가 감지되면 이메일 알림 전송
+	if captchaDetected {
+		g.addLog("🚨 CAPTCHA 감지됨! 이메일 알림 전송 중...")
+		if err := notifier.SendCaptchaAlert(); err != nil {
+			g.addLog(fmt.Sprintf("❌ CAPTCHA 알림 전송 실패: %v", err))
+		} else {
+			g.addLog("✅ CAPTCHA 알림 이메일 전송 완료!")
+		}
 	}
 	
 	// Check for newly opened programs
@@ -751,24 +809,27 @@ func (g *GUI) addLog(message string) {
 	
 	// Fyne UI 업데이트는 반드시 메인 스레드에서 실행
 	if g.app != nil && g.window != nil {
-		// RunOnMain을 사용하여 스레드 안전성 보장
-		g.window.Canvas().Content().Refresh()
-		
-		// Add to main log tab
-		if g.logOutput != nil {
-			current := g.logOutput.Text
-			g.logOutput.SetText(current + logMessage)
-			// 스크롤을 맨 아래로
-			g.logOutput.CursorRow = len(strings.Split(g.logOutput.Text, "\n")) - 1
-		}
-		
-		// Also add to activity log on monitor tab
-		if g.activityLog != nil {
-			current := g.activityLog.Text
-			g.activityLog.SetText(current + cleanMessage)
-			// 스크롤을 맨 아래로
-			g.activityLog.CursorRow = len(strings.Split(g.activityLog.Text, "\n")) - 1
-		}
+		// fyne.Do()를 사용하여 메인 스레드에서 UI 업데이트 실행
+		fyne.Do(func() {
+			// Add to main log tab
+			if g.logOutput != nil {
+				current := g.logOutput.Text
+				g.logOutput.SetText(current + logMessage)
+				// 스크롤을 맨 아래로
+				g.logOutput.CursorRow = len(strings.Split(g.logOutput.Text, "\n")) - 1
+			}
+			
+			// Also add to activity log on monitor tab
+			if g.activityLog != nil {
+				current := g.activityLog.Text
+				g.activityLog.SetText(current + cleanMessage)
+				// 스크롤을 맨 아래로
+				g.activityLog.CursorRow = len(strings.Split(g.activityLog.Text, "\n")) - 1
+			}
+			
+			// Refresh canvas after updates
+			g.window.Canvas().Content().Refresh()
+		})
 	}
 }
 

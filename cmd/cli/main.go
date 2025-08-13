@@ -49,9 +49,22 @@ func main() {
 		log.Fatalf("❌ 설정 파일 로드 실패: %v", err)
 	}
 
-	// 간격 설정 덮어쓰기
+	// CLI 플래그가 설정되면 config의 값을 덮어쓰기
 	if interval > 0 {
 		cfg.Monitor.Interval = interval
+	}
+	// headless 플래그가 false로 설정된 경우 config 덮어쓰기
+	// (기본값이 true이므로 false일 때만 사용자가 변경한 것)
+	if !headless {
+		cfg.Monitor.Headless = false
+	} else {
+		// 명시적으로 true를 원하거나 기본값 사용 시 config 값 유지
+		// config에 값이 없으면 true 사용
+		if cfg.Monitor.Headless == false {
+			// config에서 false로 설정된 경우 유지
+		} else {
+			cfg.Monitor.Headless = true
+		}
 	}
 
 	// 설정 확인
@@ -104,20 +117,20 @@ func runMonitoring(cfg *config.Config, stopChan chan bool) error {
 	log.Println("🚀 모니터링 시작...")
 
 	// 브라우저 클라이언트 초기화
-	browserClient, err := browser.NewBrowserClient()
+	browserClient, err := browser.NewBrowserClientWithConfig(cfg)
 	if err != nil {
 		return fmt.Errorf("브라우저 초기화 실패: %w", err)
 	}
 	defer browserClient.Close()
 
 	// 브라우저 시작
-	if headless {
+	if cfg.Monitor.Headless {
 		log.Println("🤖 백그라운드 모드로 브라우저 시작...")
 	} else {
 		log.Println("👀 일반 모드로 브라우저 시작 (창이 표시됩니다)...")
 	}
 
-	if err := browserClient.Start(headless); err != nil {
+	if err := browserClient.Start(cfg.Monitor.Headless); err != nil {
 		return fmt.Errorf("브라우저 시작 실패: %w", err)
 	}
 
@@ -167,11 +180,21 @@ func checkReservations(browser *browser.BrowserClient, notifier *notifier.EmailN
 		programNames = append(programNames, program.Name)
 	}
 
-	// 예약 페이지 확인
-	availability, err := browser.CheckReservationPage(programNames)
+	// 예약 페이지 확인 (hCaptcha 감지 포함)
+	availability, captchaDetected, err := browser.CheckReservationPageWithCaptchaAlert(programNames)
 	if err != nil {
 		log.Printf("❌ 예약 페이지 확인 실패: %v", err)
 		return
+	}
+	
+	// hCaptcha가 감지되면 이메일 알림 전송
+	if captchaDetected {
+		log.Println("📨 CAPTCHA 감지 이메일 알림 전송 중...")
+		if err := notifier.SendCaptchaAlert(); err != nil {
+			log.Printf("❌ CAPTCHA 알림 전송 실패: %v", err)
+		} else {
+			log.Println("✅ CAPTCHA 알림 이메일 전송 완료!")
+		}
 	}
 
 	// 결과 확인
